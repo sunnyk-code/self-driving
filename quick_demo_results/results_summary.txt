@@ -1,0 +1,15 @@
+FGSM vs Semantic Segmentation - Results Summary
+=============================================
+
+Image: data/cityscapes/leftImg8bit_trainvaltest/leftImg8bit/test/bielefeld/bielefeld_000000_021341_leftImg8bit.png
+Image dimensions: (1024, 2048, 3)
+Method: structured
+Epsilon: 0.01
+
+Timing:
+  - Adversarial example generation: 0.14 seconds
+  - Model prediction: 17.83 seconds
+
+Effectiveness:
+  - Pixels changed: 159698 out of 2097152
+  - Percentage changed: 7.61%

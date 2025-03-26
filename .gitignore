@@ -11,15 +11,87 @@ __pycache__/
 *$py.class
 *.so
 .Python
-.env
-.venv
 env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
 venv/
 ENV/
-.DS_Store
 
-# IDE
-.vscode/
+# Virtual Environment
+.env
+.venv
+venv/
+ENV/
+
+# IDE files
 .idea/
+.vscode/
 *.swp
 *.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Models (large files)
+models/
+*.pb
+*.pth
+*.h5
+*.onnx
+*.tflite
+*.tar.gz
+
+# Datasets (large files)
+data/
+datasets/
+cityscapes/
+leftImg8bit/
+gtFine/
+leftImg8bit_trainvaltest/
+gtFine_trainvaltest/
+
+# Results and outputs (can be regenerated)
+results/
+outputs/
+single_example_results/
+fast_fgsm_results/
+example_results/
+*.png
+*.jpg
+*.jpeg
+comparison/
+
+# Logs
+logs/
+*.log
+events.out.tfevents.*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
