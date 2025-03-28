@@ -35,6 +35,7 @@ ENV/
 .venv
 venv/
 ENV/
+dl-proj-env/
 
 # IDE files
 .idea/

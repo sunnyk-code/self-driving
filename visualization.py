@@ -43,20 +43,16 @@ def visualize_results(original_image, ground_truth=None, original_pred=None,
     
     # Plot ground truth if provided
     if ground_truth is not None:
-        if colormap is not None:
-            axes[col_idx].imshow(ground_truth, cmap=ListedColormap(colormap))
-        else:
-            axes[col_idx].imshow(ground_truth)
+        # Don't need to explicitly convert to ListedColormap here
+        axes[col_idx].imshow(ground_truth, cmap=colormap)
         axes[col_idx].set_title("Ground Truth")
         axes[col_idx].axis('off')
         col_idx += 1
     
     # Plot original prediction if provided
     if original_pred is not None:
-        if colormap is not None:
-            axes[col_idx].imshow(original_pred, cmap=ListedColormap(colormap))
-        else:
-            axes[col_idx].imshow(original_pred)
+        # Don't need to explicitly convert to ListedColormap here
+        axes[col_idx].imshow(original_pred, cmap=colormap)
         axes[col_idx].set_title("Original Prediction")
         axes[col_idx].axis('off')
         col_idx += 1
@@ -70,10 +66,8 @@ def visualize_results(original_image, ground_truth=None, original_pred=None,
     
     # Plot adversarial prediction if provided
     if adversarial_pred is not None:
-        if colormap is not None:
-            axes[col_idx].imshow(adversarial_pred, cmap=ListedColormap(colormap))
-        else:
-            axes[col_idx].imshow(adversarial_pred)
+        # Don't need to explicitly convert to ListedColormap here
+        axes[col_idx].imshow(adversarial_pred, cmap=colormap)
         axes[col_idx].set_title("Adversarial Prediction")
         axes[col_idx].axis('off')
     
@@ -134,4 +128,63 @@ def visualize_perturbation(original_image, adversarial_image, save_path=None, fi
         plt.savefig(save_path, bbox_inches='tight')
         plt.close()
     else:
-        plt.show() 
+        plt.show()
+
+def visualize_perturbation_only(perturbation, save_path=None, figsize=(10, 5)):
+    """
+    Visualize the perturbation directly.
+    
+    Args:
+        perturbation: Perturbation array (difference between adversarial and original)
+        save_path: Path to save visualization (if None, will display)
+        figsize: Figure size
+        
+    Returns:
+        Visualization of perturbation as a numpy array
+    """
+    # Scale perturbation for better visualization
+    # Map values to range [0, 255]
+    abs_pert = np.abs(perturbation)
+    if abs_pert.max() > 0:  # Avoid division by zero
+        # Scale to [0, 255] based on max magnitude
+        scale_factor = 255.0 / abs_pert.max()
+    else:
+        scale_factor = 1.0
+        
+    # Create a RGB visualization where:
+    # - Red: positive perturbation
+    # - Blue: negative perturbation
+    # - Intensity: magnitude of perturbation
+    pert_vis = np.zeros((*perturbation.shape[0:2], 3), dtype=np.uint8)
+    
+    # Red channel: positive perturbations
+    pos_mask = perturbation > 0
+    if np.any(pos_mask):
+        for c in range(3):  # Apply to all channels
+            pert_vis[:, :, 0][pos_mask[:, :, c]] = np.clip(
+                perturbation[:, :, c][pos_mask[:, :, c]] * scale_factor, 
+                0, 255
+            ).astype(np.uint8)
+    
+    # Blue channel: negative perturbations
+    neg_mask = perturbation < 0
+    if np.any(neg_mask):
+        for c in range(3):  # Apply to all channels
+            pert_vis[:, :, 2][neg_mask[:, :, c]] = np.clip(
+                -perturbation[:, :, c][neg_mask[:, :, c]] * scale_factor, 
+                0, 255
+            ).astype(np.uint8)
+    
+    # If save_path is provided, save the visualization
+    if save_path:
+        plt.figure(figsize=figsize)
+        plt.imshow(pert_vis)
+        plt.title("Perturbation (Red: positive, Blue: negative)")
+        plt.axis('off')
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, bbox_inches='tight')
+        plt.close()
+    
+    return pert_vis

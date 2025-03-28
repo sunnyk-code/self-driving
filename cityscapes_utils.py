@@ -36,16 +36,17 @@ def create_colormap(segmentation, colormap=CITYSCAPES_COLORS):
         
     Returns:
         RGB image where each pixel is colored according to its class
-    """
+    """    
     # Create empty RGB image
     height, width = segmentation.shape[:2]
     colored_mask = np.zeros((height, width, 3), dtype=np.uint8)
     
     # Assign colors based on class IDs
     for class_id, color in enumerate(colormap):
-        mask = (segmentation == class_id)
-        colored_mask[mask] = color
-        
+        if class_id < len(colormap):  # Make sure we don't exceed colormap length
+            mask = segmentation == class_id
+            colored_mask[mask] = color
+    
     return colored_mask
 
 def find_label_path(image_path):
@@ -161,3 +162,32 @@ def load_cityscapes_label(label_path):
     except Exception as e:
         print(f"Error loading label {label_path}: {e}")
         return None 
+    
+
+def cityscapes_classes():
+    """Return the list of class names for Cityscapes dataset."""
+    return [
+        'road',          # 0
+        'sidewalk',      # 1 
+        'building',      # 2
+        'wall',          # 3
+        'fence',         # 4
+        'pole',          # 5
+        'traffic light', # 6
+        'traffic sign',  # 7
+        'vegetation',    # 8
+        'terrain',       # 9
+        'sky',           # 10
+        'person',        # 11
+        'rider',         # 12
+        'car',           # 13
+        'truck',         # 14
+        'bus',           # 15
+        'train',         # 16
+        'motorcycle',    # 17
+        'bicycle'        # 18
+    ]
+
+def cityscapes_colormap():
+    """Return the colormap for Cityscapes dataset."""
+    return CITYSCAPES_COLORS
