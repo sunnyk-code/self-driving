@@ -76,7 +76,7 @@ def compute_metrics(preds, labels, num_classes=19, ignore_index=255):
     mean_iou = np.mean(ious) if ious else 0.0
     return mean_iou, pix_acc
 
-def adversarial_train(model, train_loader, device, epochs=20, epsilon=0.03, lr=1e-4, save_path=None, test_mode=False):
+def adversarial_train(model, train_loader, device, epochs=20, epsilon=0.03, lr=1e-4, save_path=None, test_mode=False, output_prefix=""):
     import matplotlib.pyplot as plt
     model.model.train()
     optimizer = optim.Adam(model.model.parameters(), lr=lr)
@@ -130,7 +130,8 @@ def adversarial_train(model, train_loader, device, epochs=20, epsilon=0.03, lr=1
     epoch_adv_losses = []
     epoch_total_losses = []
     # Open file to log batch losses
-    with open('batch_losses.txt', 'w') as log_file:
+    batch_losses_filename = f"{output_prefix}batch_losses_epsilon{epsilon}.txt"
+    with open(batch_losses_filename, 'w') as log_file:
         for epoch in range(epochs):
             print(f"\nEpoch {epoch+1}/{epochs} started.")
             model.model.train()
@@ -141,6 +142,10 @@ def adversarial_train(model, train_loader, device, epochs=20, epsilon=0.03, lr=1
             epoch_adv_loss = 0.0
             epoch_total_loss = 0.0
             n_batches = 0
+            epoch_adv_mious = []
+            epoch_adv_pixaccs = []
+            epoch_clean_mious = []
+            epoch_clean_pixaccs = []
             for batch_idx, (images, labels) in enumerate(train_loader):
                 print(f"  Batch {batch_idx+1} started.")
                 images, labels = images.to(device), labels.to(device)
@@ -154,6 +159,10 @@ def adversarial_train(model, train_loader, device, epochs=20, epsilon=0.03, lr=1
                 loss = criterion(outputs, labels)
                 print(f"    Clean loss: {loss.item():.4f}")
 
+                # Clean metrics
+                preds = torch.argmax(outputs, dim=1)
+                miou_clean, pixacc_clean = compute_metrics(preds, labels)
+
                 # Adversarial training step
                 adv_images = fgsm_attack(images, labels, model, criterion, epsilon)
                 adv_outputs = model.model(adv_images)
@@ -161,6 +170,10 @@ def adversarial_train(model, train_loader, device, epochs=20, epsilon=0.03, lr=1
                     adv_outputs = adv_outputs['out']
                 adv_loss = criterion(adv_outputs, labels)
                 print(f"    Adversarial loss: {adv_loss.item():.4f}")
+
+                # Adversarial metrics
+                adv_preds = torch.argmax(adv_outputs, dim=1)
+                miou_adv, pixacc_adv = compute_metrics(adv_preds, labels)
 
                 total_loss = (loss + adv_loss) / 2
 
@@ -176,18 +189,30 @@ def adversarial_train(model, train_loader, device, epochs=20, epsilon=0.03, lr=1
                 epoch_adv_loss += adv_loss.item()
                 epoch_total_loss += total_loss.item()
 
-                # Metrics (on clean images)
-                preds = torch.argmax(outputs, dim=1)
-                miou, pixacc = compute_metrics(preds, labels)
-                running_miou += miou
-                running_pixacc += pixacc
+                running_miou += miou_clean
+                running_pixacc += pixacc_clean
                 n_batches += 1
 
+                epoch_adv_mious.append(miou_adv)
+                epoch_adv_pixaccs.append(pixacc_adv)
+                epoch_clean_mious.append(miou_clean)
+                epoch_clean_pixaccs.append(pixacc_clean)
+
                 # Log to file
-                log_file.write(f"Epoch {epoch+1}, Batch {batch_idx+1}, Clean Loss: {loss.item():.4f}, Adversarial Loss: {adv_loss.item():.4f}, Total Loss: {total_loss.item():.4f}, mIoU: {miou:.4f}, PixAcc: {pixacc:.4f}\n")
+                log_file.write(
+                    f"Epoch {epoch+1}, Batch {batch_idx+1}, "
+                    f"Clean Loss: {loss.item():.4f}, Adv Loss: {adv_loss.item():.4f}, Total Loss: {total_loss.item():.4f}, "
+                    f"Clean mIoU: {miou_clean:.4f}, Clean PixAcc: {pixacc_clean:.4f}, "
+                    f"Adv mIoU: {miou_adv:.4f}, Adv PixAcc: {pixacc_adv:.4f}\n"
+                )
                 log_file.flush()
 
-                print(f"    Batch {batch_idx+1} finished. Total loss: {total_loss.item():.4f}, mIoU: {miou:.4f}, PixAcc: {pixacc:.4f}")
+                print(
+                    f"    Batch {batch_idx+1} finished. "
+                    f"Total loss: {total_loss.item():.4f}, "
+                    f"Clean mIoU: {miou_clean:.4f}, Clean PixAcc: {pixacc_clean:.4f}, "
+                    f"Adv mIoU: {miou_adv:.4f}, Adv PixAcc: {pixacc_adv:.4f}"
+                )
 
             avg_loss = running_loss / n_batches
             avg_miou = running_miou / n_batches
@@ -195,7 +220,17 @@ def adversarial_train(model, train_loader, device, epochs=20, epsilon=0.03, lr=1
             epoch_clean_losses.append(epoch_clean_loss / n_batches)
             epoch_adv_losses.append(epoch_adv_loss / n_batches)
             epoch_total_losses.append(epoch_total_loss / n_batches)
-            print(f"Epoch {epoch+1}/{epochs} finished. Loss: {avg_loss:.4f}, Mean IoU: {avg_miou:.4f}, Pixel Acc: {avg_pixacc:.4f}")
+
+            avg_clean_miou = np.mean(epoch_clean_mious)
+            avg_clean_pixacc = np.mean(epoch_clean_pixaccs)
+            avg_adv_miou = np.mean(epoch_adv_mious)
+            avg_adv_pixacc = np.mean(epoch_adv_pixaccs)
+
+            print(
+                f"Epoch {epoch+1}/{epochs} finished. Loss: {avg_loss:.4f}, "
+                f"Clean mIoU: {avg_clean_miou:.4f}, Clean PixAcc: {avg_clean_pixacc:.4f}, "
+                f"Adv mIoU: {avg_adv_miou:.4f}, Adv PixAcc: {avg_adv_pixacc:.4f}"
+            )
 
             # Save checkpoint after each epoch if save_path is provided
             if save_path:
@@ -204,6 +239,7 @@ def adversarial_train(model, train_loader, device, epochs=20, epsilon=0.03, lr=1
     print("Adversarial training completed.")
 
     # Plot and save loss curves by epoch
+    loss_curves_filename = f"{output_prefix}loss_curves_epsilon{epsilon}.png"
     plt.figure(figsize=(10,6))
     plt.plot(range(1, len(epoch_clean_losses)+1), epoch_clean_losses, label='Clean Loss')
     plt.plot(range(1, len(epoch_adv_losses)+1), epoch_adv_losses, label='Adversarial Loss')
@@ -213,17 +249,21 @@ def adversarial_train(model, train_loader, device, epochs=20, epsilon=0.03, lr=1
     plt.title('Training Loss Curves (per Epoch)')
     plt.legend()
     plt.tight_layout()
-    plt.savefig('loss_curves.png')
-    print('Loss curves saved to loss_curves.png')
+    plt.savefig(loss_curves_filename)
+    print(f'Loss curves saved to {loss_curves_filename}')
 
-def evaluate(model, data_loader, device, results_file='test_results.txt'):
+def evaluate(model, data_loader, device, results_file=None, epsilon=0.03, output_prefix=""):
     model.model.eval()
     total_miou = 0.0
     total_pixacc = 0.0
+    total_miou_adv = 0.0
+    total_pixacc_adv = 0.0
     n_batches = 0
-    with torch.no_grad():
-        for images, labels in data_loader:
-            images, labels = images.to(device), labels.to(device)
+    criterion = nn.CrossEntropyLoss(ignore_index=255)
+    for images, labels in data_loader:
+        images, labels = images.to(device), labels.to(device)
+        # Clean evaluation
+        with torch.no_grad():
             outputs = model.model(images)
             if isinstance(outputs, dict) and 'out' in outputs:
                 outputs = outputs['out']
@@ -231,12 +271,39 @@ def evaluate(model, data_loader, device, results_file='test_results.txt'):
             miou, pixacc = compute_metrics(preds, labels)
             total_miou += miou
             total_pixacc += pixacc
-            n_batches += 1
+        # Adversarial evaluation (FGSM) - must require grad
+        images_adv = images.detach().clone()
+        images_adv.requires_grad = True
+        outputs_adv = model.model(images_adv)
+        if isinstance(outputs_adv, dict) and 'out' in outputs_adv:
+            outputs_adv = outputs_adv['out']
+        loss_adv = criterion(outputs_adv, labels)
+        model.model.zero_grad()
+        loss_adv.backward()
+        data_grad = images_adv.grad.data
+        perturbed_images = images_adv + epsilon * data_grad.sign()
+        perturbed_images = torch.clamp(perturbed_images, 0, 1)
+        # Evaluate on adversarial images
+        with torch.no_grad():
+            adv_outputs = model.model(perturbed_images)
+            if isinstance(adv_outputs, dict) and 'out' in adv_outputs:
+                adv_outputs = adv_outputs['out']
+            adv_preds = torch.argmax(adv_outputs, dim=1)
+            miou_adv, pixacc_adv = compute_metrics(adv_preds, labels)
+            total_miou_adv += miou_adv
+            total_pixacc_adv += pixacc_adv
+        n_batches += 1
     avg_miou = total_miou / n_batches
     avg_pixacc = total_pixacc / n_batches
-    result_str = f"Test set results: Mean IoU: {avg_miou:.4f}, Pixel Acc: {avg_pixacc:.4f}\n"
+    avg_miou_adv = total_miou_adv / n_batches
+    avg_pixacc_adv = total_pixacc_adv / n_batches
+    result_str = (
+        f"Test set results (clean): Mean IoU: {avg_miou:.4f}, Pixel Acc: {avg_pixacc:.4f}\n"
+        f"Test set results (adversarial, epsilon={epsilon}): Mean IoU: {avg_miou_adv:.4f}, Pixel Acc: {avg_pixacc_adv:.4f}\n"
+    )
+    results_filename = f"{output_prefix}test_results_epsilon{epsilon}.txt"
     print(result_str)
-    with open(results_file, 'w') as f:
+    with open(results_filename, 'w') as f:
         f.write(result_str)
 
 if __name__ == "__main__":
@@ -245,7 +312,6 @@ if __name__ == "__main__":
     IMG_ROOT = './leftImg8bit_trainvaltest'
     LABEL_ROOT = './gtFine_trainvaltest'
     CHECKPOINT_PATH = './checkpoints/best_deeplabv3plus_mobilenet_cityscapes_os16.pth'
-    SAVE_PATH = './checkpoints/adv_trained_deeplabv3plus_mobilenet_cityscapes_os16.pth'
 
     # Get train set file lists
     image_paths, label_paths = get_dataset_files(DATA_ROOT, split='train')
@@ -268,24 +334,34 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.model.to(device)
 
-    adversarial_train(model, train_loader, device, epochs=20, epsilon=0.1, lr=1e-4, save_path=SAVE_PATH, test_mode=test_mode)
-
-    # Evaluate on test set
-    test_image_paths, test_label_paths = get_dataset_files(DATA_ROOT, split='test')
-    print(f"Found {len(test_image_paths)} test images.")
-    if len(test_image_paths) > 0:
-        test_dataset = CityscapesSegmentationDataset(test_image_paths, test_label_paths, transform=transform)
-        if test_mode:
-            from torch.utils.data import Subset
-            test_subset = Subset(test_dataset, range(10))  # Use first 10 test samples
-            test_loader = DataLoader(test_subset, batch_size=2, shuffle=False, num_workers=1, pin_memory=True)
-            print("[TEST MODE] Evaluating on a small subset of the test set.")
+    epsilons = [0.1, 0.3]
+    for epsilon in epsilons:
+        print(f"\n==============================\nRunning training with epsilon={epsilon}\n==============================")
+        output_prefix = f"epsilon{epsilon}_"
+        save_path = f"./checkpoints/adv_trained_deeplabv3plus_mobilenet_cityscapes_os16_epsilon{epsilon}.pth"
+        adversarial_train(
+            model, train_loader, device, epochs=20, epsilon=epsilon, lr=1e-4,
+            save_path=save_path, test_mode=test_mode, output_prefix=output_prefix
+        )
+        # Evaluate on test set
+        test_image_paths, test_label_paths = get_dataset_files(DATA_ROOT, split='test')
+        print(f"Found {len(test_image_paths)} test images.")
+        if len(test_image_paths) > 0:
+            test_dataset = CityscapesSegmentationDataset(test_image_paths, test_label_paths, transform=transform)
+            if test_mode:
+                from torch.utils.data import Subset
+                test_subset = Subset(test_dataset, range(10))  # Use first 10 test samples
+                test_loader = DataLoader(test_subset, batch_size=2, shuffle=False, num_workers=1, pin_memory=True)
+                print("[TEST MODE] Evaluating on a small subset of the test set.")
+            else:
+                test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=1, pin_memory=True)
+            # Load best model if needed
+            if os.path.exists(save_path):
+                checkpoint = torch.load(save_path, map_location=device)
+                model.model.load_state_dict(checkpoint['model_state'])
+            evaluate(
+                model, test_loader, device,
+                results_file=None, epsilon=epsilon, output_prefix=output_prefix
+            )
         else:
-            test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=1, pin_memory=True)
-        # Load best model if needed
-        if os.path.exists(SAVE_PATH):
-            checkpoint = torch.load(SAVE_PATH, map_location=device)
-            model.model.load_state_dict(checkpoint['model_state'])
-        evaluate(model, test_loader, device)
-    else:
-        print("No test images found.")
+            print("No test images found.")
