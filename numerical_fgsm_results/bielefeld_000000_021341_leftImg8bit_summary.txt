@@ -1,0 +1,12 @@
+Numerical FGSM Results Summary
+=============================
+
+Image: data/cityscapes/leftImg8bit_trainvaltest/leftImg8bit/test/bielefeld/bielefeld_000000_021341_leftImg8bit.png
+Epsilon: 0.02
+Attack type: Untargeted
+Number of samples: 1000
+
+Results:
+  - Pixels changed: 2.66%
+  - Max perturbation: 5.00
+  - Mean perturbation: 0.50

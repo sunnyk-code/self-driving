@@ -309,8 +309,8 @@ def evaluate(model, data_loader, device, results_file=None, epsilon=0.03, output
 if __name__ == "__main__":
     # Set paths
     DATA_ROOT = './'  # Adjust if needed
-    IMG_ROOT = './leftImg8bit_trainvaltest'
-    LABEL_ROOT = './gtFine_trainvaltest'
+    IMG_ROOT = './leftImg8bit'
+    LABEL_ROOT = './gtFine'
     CHECKPOINT_PATH = './checkpoints/best_deeplabv3plus_mobilenet_cityscapes_os16.pth'
 
     # Get train set file lists
@@ -329,12 +329,12 @@ if __name__ == "__main__":
         small_subset = Subset(dataset, range(10))  # Use first 10 samples
         train_loader = DataLoader(small_subset, batch_size=2, shuffle=True, num_workers=1, pin_memory=True)
     else:
-        train_loader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=1, pin_memory=True)
+        train_loader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=1, pin_memory=True, drop_last=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.model.to(device)
 
-    epsilons = [0.1, 0.3]
+    epsilons = [0.05]
     for epsilon in epsilons:
         print(f"\n==============================\nRunning training with epsilon={epsilon}\n==============================")
         output_prefix = f"epsilon{epsilon}_"
